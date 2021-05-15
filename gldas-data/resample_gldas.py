@@ -1,143 +1,129 @@
+"""
+array[::2] "resamples" an array taking every other point
+
+how this works:
+1. get a list of all the indices in an array on both axes
+2. resample both to every other point
+3. iterate over both at the same time
+4. for each combo, average the point, plus the 3 cells 1 step forward in each axis
+5. put that in a new "row"
+6. After finishing iterating across one of the directions, put that row into the new array
+7. After finishing all iterations, create an np.array with the collection
+
+Example:
+    _1darray = np.array(range(1, 51))
+    print(_1darray)
+    print(resample_1d_array(_1darray))
+
+    _2darray = np.array(range(1, 201)).reshape((20, 10))
+    print(_2darray)
+    print(resample_2d_array(_2darray))
+
+"""
+
 import glob
 import os
 import netCDF4 as nc
 import numpy as np
-import xarray as xr
+import sys
+import datetime
 
 
-home_path = os.path.dirname(__file__)
-raw_files = sorted(glob.glob(os.path.join(home_path, 'original-data', 'GLDAS*.nc4')))
-save_path = os.path.join(home_path, 'half-degree-data')
-
-filepaths = ['original-data/GLDAS_NOAH025_M.A194801.020.nc4', ]
-# a = nc.Dataset('GLDAS_NOAH025_M.A194801.020.nc4')
-# b = nc.Dataset('HALFDEGREE_GLDAS_NOAH025_M.A194801.020.nc4')
-
-# test = np.array([i for i in range(1, 51)])
-# print(test)
-# test1 = test[::2]
-# print(test1)
-# exit()
-
-raw_files = raw_files[:20]
-a = xr.open_mfdataset(raw_files, combine='nested', concat_dim='time')
-print(a)
-a.close()
-
-exit()
+def resample_1d_array(a: np.array):
+    new_array = []
+    for i in np.array(range(a.shape[0]))[::2]:
+        avg = np.nanmean([a[i], a[i + 1]])
+        new_array.append(avg)
+    return np.array(new_array)
 
 
-# this is where the files start getting copied
-for filepath in filepaths:
-    filename = os.path.basename(filepath)
-    print('Working on file ' + str(filepath))
-    openpath = os.path.join(home_path, filepath)
-    savepath = os.path.join(save_path, 'processed_' + filepath)
+def resample_2d_array(a: np.array):
+    new_array = []
+    for i in np.array(range(a.shape[0]))[::2]:
+        new_row = []
+        for j in np.array(range(a.shape[1]))[::2]:
+            avg = np.nanmean([a[i, j], a[i + 1, j], a[i + 1, j + 1], a[i, j + 1]])
+            new_row.append(avg)
+        new_array.append(new_row)
+    return np.array(new_array)
+
+
+def resample(open_path: str, save_dir: str):
+    start_time = datetime.datetime.utcnow()
+    print(f'Working on file: {open_path}')
+    print(f'-- started at: {start_time.strftime("%Y-%m-%d %X")}')
+
+    save_path = os.path.join(save_dir, f'HalfDegree_{os.path.basename(open_path)}')
+
     # open the file to be copied
-    original = nc.Dataset(openpath, 'r', clobber=False, diskless=True)
-    duplicate = nc.Dataset(savepath, 'w', clobber=True, format='NETCDF4', diskless=False)
-    # set the global netcdf attributes - important for georeferencing
+    original = nc.Dataset(open_path, 'r', clobber=False, diskless=True)
+    duplicate = nc.Dataset(save_path, 'w', clobber=True, format='NETCDF4', diskless=False)
+
+    # copy the global netcdf attributes
     duplicate.setncatts(original.__dict__)
 
     # specify dimensions from what we copied before
-    for dimension in dimensions:
-        duplicate.createDimension(dimension, dimensions[dimension])
+    for dimension in original.dimensions:
+        size = original.dimensions[dimension].size
+        if dimension in ('lat', 'lon', ):
+            size = size / 2
+        duplicate.createDimension(dimension, size)
 
+    # handle lat, lon, and time separately because they have 1d arrays
     duplicate.createVariable(varname='lat', datatype='f4', dimensions='lat', zlib=True, shuffle=True)
     duplicate.createVariable(varname='lon', datatype='f4', dimensions='lon', zlib=True, shuffle=True)
-    # duplicate.createVariable(varname='lat', datatype='f4', dimensions='lat')
-    # duplicate.createVariable(varname='lon', datatype='f4', dimensions='lon')
-
-    # create the lat and lon values as a 1D array
-    lat_list = [lat_min + i * lat_step for i in range(dimensions['lat'])]
-    lon_list = [lon_min + i * lon_step for i in range(dimensions['lon'])]
-    duplicate['lat'][:] = lat_list
-    duplicate['lon'][:] = lon_list
-
-    # set the attributes for lat and lon (except fill value, you just can't copy it)
-    for attr in original['lat'].__dict__:
-        if attr != "_FillValue":
-            duplicate['lat'].setncattr(attr, original['lat'].__dict__[attr])
-    for attr in original['lon'].__dict__:
-        if attr != "_FillValue":
-            duplicate['lon'].setncattr(attr, original['lon'].__dict__[attr])
+    duplicate.createVariable(varname='time', datatype='i', dimensions='time', zlib=True, shuffle=True)
+    duplicate['lat'][:] = resample_1d_array(original['lat'][:])
+    duplicate['lon'][:] = resample_1d_array(original['lon'][:])
+    duplicate['time'][:] = original['time'][:]
+    for variable in ('time', 'lat', 'lon', ):
+        for attr in original[variable].__dict__:
+            if attr != "_FillValue":
+                duplicate[variable].setncattr(attr, original[variable].__dict__[attr])
 
     # copy the rest of the variables
-    date = '201906'
-    timestep = 0
-    timedelta = 1
-    for variable in variables:
-        # check to use the lat/lon dimension names
-        dimension = original[variable].dimensions
-        if 'latitude' in dimension:
-            dimension = list(dimension)
-            dimension.remove('latitude')
-            dimension.append('lat')
-            dimension = tuple(dimension)
-        if 'north_south' in dimension:
-            dimension = list(dimension)
-            dimension.remove('north_south')
-            dimension.append('lat')
-            dimension = tuple(dimension)
-        if 'longitude' in dimension:
-            dimension = list(dimension)
-            dimension.remove('longitude')
-            dimension.append('lon')
-            dimension = tuple(dimension)
-        if 'east_west' in dimension:
-            dimension = list(dimension)
-            dimension.remove('east_west')
-            dimension.append('lon')
-            dimension = tuple(dimension)
-        if 'time' not in dimension:
-            dimension = list(dimension)
-            dimension = ['time'] + dimension
-            dimension = tuple(dimension)
-        if len(dimension) == 2:
-            dimension = ('time', 'lat', 'lon')
-        if variable == 'time':
-            dimension = ('time',)
-
+    for variable in original.variables:
+        if variable in ('time', 'lat', 'lon', 'time_bnds'):
+            continue
         print(variable)
-        print(dimension)
-
         # create the variable
-        if compress:
-            duplicate.createVariable(varname=variable, datatype='f4', dimensions=dimension, zlib=True, shuffle=True)
-        else:
-            duplicate.createVariable(varname=variable, datatype='f4', dimensions=dimension)
+        duplicate.createVariable(varname=variable, datatype='f4', dimensions=original[variable].dimensions,
+                                 zlib=True, shuffle=True, fill_value=original[variable].__dict__.get('_FillValue', None))
+        # set the attributes for lat and lon (except fill value, you just can't copy it)
+        for attr in original[variable].__dict__:
+            if attr != "_FillValue":
+                duplicate[variable].setncattr(attr, original[variable].__dict__[attr])
+        # copy the array and resample
+        arr = np.array(original[variable][:])
+        arr[arr < -9000] = np.nan
+        arr = np.squeeze(arr)
+        duplicate[variable][:] = resample_2d_array(arr)
 
-        # copy the arrays of data and set the metadata/properties
-        if variable == 'time':
-            duplicate[variable][:] = [timestep]
-            timestep += timedelta
-            duplicate[variable].long_name = original[variable].long_name
-            duplicate[variable].units = "hours since " + date
-            duplicate[variable].axis = "T"  # or time
-            # also set the begin date of this data
-            duplicate[variable].begin_date = date
-        if variable == 'lat':
-            duplicate[variable][:] = original[variable][:]
-            duplicate[variable].axis = "Y"  # or lat
-        if variable == 'lon':
-            duplicate[variable][:] = original[variable][:]
-            duplicate[variable].axis = "X"  # or lon
-        else:
-            duplicate[variable][:] = original[variable][:]
-            duplicate[variable].axis = "lat lon"
+        # write the changes to disc
+        duplicate.sync()
 
-        duplicate[variable].begin_date = date
-        try:
-            duplicate[variable].long_name = original[variable].long_name
-        except AttributeError:
-            duplicate[variable].long_name = variable
-        try:
-            duplicate[variable].units = original[variable].units
-        except AttributeError:
-            duplicate[variable].units = 'unknown units'
-
-    # close the file then start again
+    # close the netcdfs
     original.close()
-    duplicate.sync()
     duplicate.close()
 
+    end_time = datetime.datetime.utcnow()
+    print(f'-- finished at: {end_time.strftime("%Y-%m-%d %X")}')
+    print(f'-- elapsed time: {(end_time - start_time).total_seconds() / 60} minutes')
+    return
+
+
+if __name__ == '__main__':
+    """
+    Expects 2 arguments
+    1- the relative path to the directory of data to be converted
+    2- the relative path to the directory to save converted data to
+    
+    Recommended usage:
+        python resample_gldas.py original-data/ half-degree-data/ >> log.log &
+    """
+    home_path = os.path.dirname(__file__)
+    read_path = sys.argv[1]
+    save_dir = sys.argv[2]
+    files_to_convert = sorted(glob.glob(os.path.join(read_path, '*.nc4')))
+    for file in files_to_convert:
+        resample(file, save_dir)
