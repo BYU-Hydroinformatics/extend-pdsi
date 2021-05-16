@@ -85,7 +85,6 @@ def resample(open_path: str, save_dir: str):
     for variable in original.variables:
         if variable in ('time', 'lat', 'lon', 'time_bnds'):
             continue
-        print(variable)
         # create the variable
         duplicate.createVariable(varname=variable, datatype='f4', dimensions=original[variable].dimensions,
                                  zlib=True, shuffle=True, fill_value=original[variable].__dict__.get('_FillValue', None))
@@ -98,9 +97,6 @@ def resample(open_path: str, save_dir: str):
         arr[arr < -9000] = np.nan
         arr = np.squeeze(arr)
         duplicate[variable][:] = resample_2d_array(arr)
-
-        # write the changes to disc
-        duplicate.sync()
 
     # close the netcdfs
     original.close()
@@ -125,5 +121,10 @@ if __name__ == '__main__':
     read_path = sys.argv[1]
     save_dir = sys.argv[2]
     files_to_convert = sorted(glob.glob(os.path.join(read_path, '*.nc4')))
-    for file in files_to_convert:
-        resample(file, save_dir)
+    try:
+        for file in files_to_convert:
+            resample(file, save_dir)
+    except Exception as e:
+        print('\n\n\n')
+        print(f'FAILED at {datetime.datetime.utcnow()}')
+        print(e)
