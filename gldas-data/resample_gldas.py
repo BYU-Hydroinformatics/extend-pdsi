@@ -115,7 +115,7 @@ if __name__ == '__main__':
     2- the relative path to the directory to save converted data to
     
     Recommended usage:
-        python resample_gldas.py original-data/ half-degree-data/ >> log.log &
+        python resample_gldas.py original-data/ half-degree-data/ > log.log &
     """
     home_path = os.path.dirname(__file__)
     read_path = sys.argv[1]
