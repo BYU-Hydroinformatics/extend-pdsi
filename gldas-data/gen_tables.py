@@ -139,8 +139,6 @@ def cell_time_series_table(file_path: str, table_path: str, dataset: str):
     return
 
 
-# todo figure out why there is a difference between the masked cells placed on the list and cells which have values
-
 gen_cell_list('/Users/rchales/data/spatialdata/GLDAS_TwoHalfClip/GLDAS_TwoHalfClip_TimeSeries_Tair_f_inst.nc',
               'lookup_tables/cell_assign_gldas_250_clipped.csv', 'Tair_f_inst', False)
 for file in glob.glob('/Users/rchales/data/spatialdata/GLDAS_TwoHalfClip/GLDAS_TwoHalfClip*'):
@@ -151,15 +149,3 @@ gen_cell_list('/Users/rchales/data/spatialdata/pdsisc.monthly.maps.1850-2018.faw
 cell_time_series_table('/Users/rchales/data/spatialdata/pdsisc.monthly.maps.1850-2018.fawc-1.r2.5x2.5.ipe-2.nc',
                        'lookup_tables/cell_assign_pdsi.csv',
                        'pdsi')
-
-
-# gen_grid_view('/Users/rchales/data/spatialdata/GLDAS_Half/HalfDegree_GLDAS_NOAH025_M.A194801.020.nc4', 'gldas05grid.nc', 'Tair_f_inst', False)
-# gen_grid_view('/Users/rchales/data/spatialdata/GLDAS_OneTwoFive/OneTwoFive_GLDAS_NOAH025_M.A194801.020.nc4', 'gldas125grid.nc', 'Tair_f_inst', False)
-# gen_grid_view('/Users/rchales/data/spatialdata/GLDAS_TwoHalf/TwoHalfDeg_GLDAS_NOAH025_M.A194801.020.nc4', 'gldas25grid.nc', 'Tair_f_inst', False)
-# gen_grid_view('/Users/rchales/data/spatialdata/pdsisc.monthly.maps.1850-2018.fawc-1.r2.5x2.5.ipe-2.nc', 'pdsigrid.nc', 'sc_PDSI_pm', True)
-
-# gen_cell_list('/Users/rchales/data/spatialdata/GLDAS_Original/GLDAS_NOAH025_M.A194801.020.nc4', 'cell_assign_gldas_025.csv', 'Tair_f_inst', True)
-# gen_cell_list('/Users/rchales/data/spatialdata/GLDAS_Half/HalfDegree_GLDAS_NOAH025_M.A194801.020.nc4', 'cell_assign_gldas_050.csv', 'Tair_f_inst', False)
-# gen_cell_list('/Users/rchales/data/spatialdata/GLDAS_OneTwoFive/OneTwoFive_GLDAS_NOAH025_M.A194801.020.nc4', 'cell_assign_gldas_125.csv', 'Tair_f_inst', False)
-# gen_cell_list('/Users/rchales/data/spatialdata/GLDAS_TwoHalf/TwoHalfDeg_GLDAS_NOAH025_M.A194801.020.nc4', 'cell_assign_gldas_250_clipped.csv.csv', 'Tair_f_inst', False)
-# gen_cell_list('/Users/rchales/data/spatialdata/pdsisc.monthly.maps.1850-2018.fawc-1.r2.5x2.5.ipe-2.nc', 'cell_assign_pdsi.csv', 'sc_PDSI_pm', True)
