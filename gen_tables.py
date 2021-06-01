@@ -54,89 +54,7 @@ def gen_cell_list(sample_file: str, csv_name: str, sample_var: str, bool_mask: b
     return
 
 
-def gen_grid_view(file_to_duplicate: str, save_path: str, sample_var_name: str, bool_mask: bool):
-    # open the file to be copied
-    original = nc.Dataset(file_to_duplicate, 'r', clobber=False, diskless=True)
-    duplicate = nc.Dataset(save_path, 'w', clobber=True, format='NETCDF4', diskless=False)
 
-    # copy the global netcdf attributes
-    duplicate.setncatts(original.__dict__)
-
-    # specify dimensions from what we copied before
-    for dimension in original.dimensions:
-        duplicate.createDimension(dimension, original.dimensions[dimension].size)
-
-    # handle lat, lon, and time separately because they have 1d arrays
-    duplicate.createVariable(varname='lat', datatype='f4', dimensions='lat', zlib=True, shuffle=True)
-    duplicate['lat'][:] = np.array(original['lat'][:])
-
-    duplicate.createVariable(varname='lon', datatype='f4', dimensions='lon', zlib=True, shuffle=True)
-    duplicate['lon'][:] = np.array(original['lon'][:])
-
-    duplicate.createVariable(varname='gridview', datatype='f4', dimensions=('lat', 'lon'), zlib=True, shuffle=True,
-                             fill_value=np.nan)
-    alternating_array = rch.arrays.gen_checkerboard(original['lat'][:].shape[0], original['lon'][:].shape[0])
-    if bool_mask:
-        mask = np.squeeze(original[sample_var_name][:].mask)
-    else:
-        mask = np.array(np.squeeze(original[sample_var_name][:]))
-        mask[mask > 0] = 1
-        mask = np.nan_to_num(mask)
-        mask = mask.astype(bool)
-    alternating_array = alternating_array.astype('float')
-    if mask.ndim == 3:
-        mask = mask[-1]
-        mask = ~mask
-    alternating_array[~mask] = np.nan
-    duplicate['gridview'][:] = alternating_array
-
-    for variable in ('lat', 'lon'):
-        for attr in original[variable].__dict__:
-            if attr != "_FillValue":
-                duplicate[variable].setncattr(attr, original[variable].__dict__[attr])
-
-    # close the netcdfs
-    original.close()
-    duplicate.close()
-
-    return
-
-
-def cell_time_series_table(file_path: str, table_path: str, dataset: str):
-    a = nc.Dataset(file_path, 'r')
-    table = pd.read_csv(table_path)
-    data = {}
-    if 'gldas' in dataset:
-        variable = os.path.basename(file_path).replace('GLDAS_TwoHalfClip_TimeSeries_', '').replace('.nc', '')
-        with open('lookup_tables/variables_lookup.json') as f:
-            gldas_var_lookup = json.loads(f.read())
-        var_code = gldas_var_lookup[variable]
-        origin = datetime.date(year=1948, month=1, day=1)
-        data['datetime'] = [origin + datetime.timedelta(days=int(i)) for i in a['time'][:]]
-        time_idx = slice(None)
-    else:
-        variable = 'sc_PDSI_pm'
-        var_code = 'v00'
-        origin = datetime.date(year=1948, month=1, day=1)
-        data['datetime'] = [origin + dateutil.relativedelta.relativedelta(months=int(i)) for i in range(853)]
-        time_idx = slice(1175, 2028)
-
-    array = np.array(a[variable][:])
-    array[array == -9999] = np.nan
-    array[array == -99999] = np.nan
-    array = np.squeeze(array)
-    for c_num, y_idx, x_idx in table[['c_num', 'y_idx', 'x_idx']].values:
-        data[f'{var_code}_c{int(c_num):04}'] = array[time_idx, int(y_idx), int(x_idx)]
-
-    a = pd.DataFrame(data)
-    a.index = a['datetime']
-    del a['datetime']
-    a.index.name = 'datetime'
-    # delete the empty columns
-    a = a.dropna(axis=1)
-    a.to_csv(f'timeseries_tables_csv/{var_code}_cell_timeseries.csv')
-    a.to_pickle(f'timeseries_tables_pickle/{var_code}_cell_timeseries.pickle')
-    return
 
 
 gen_cell_list('/Users/rchales/data/spatialdata/GLDAS_TwoHalfClip/GLDAS_TwoHalfClip_TimeSeries_Tair_f_inst.nc',
@@ -149,3 +67,4 @@ gen_cell_list('/Users/rchales/data/spatialdata/pdsisc.monthly.maps.1850-2018.faw
 cell_time_series_table('/Users/rchales/data/spatialdata/pdsisc.monthly.maps.1850-2018.fawc-1.r2.5x2.5.ipe-2.nc',
                        'lookup_tables/cell_assign_pdsi.csv',
                        'pdsi')
+

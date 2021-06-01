@@ -271,26 +271,26 @@ def split_variables(files: list or str, save_dir: str):
     return
 
 
-# if __name__ == '__main__':
-#     """
-#     Expects 2 arguments
-#     1- the relative path to the directory of data to be converted
-#     2- the relative path to the directory to save converted data to
-#     2- the relative path to the log file
-#
-#     Recommended usage:
-#         python resample_gldas.py original-data/ half-degree-data/ log.log &
-#     """
-#     home_path = os.path.dirname(__file__)
-#     read_path = sys.argv[1]
-#     save_dir = sys.argv[2]
-#     log_file = sys.argv[3]
-#     files_to_convert = sorted(glob.glob(os.path.join(read_path, '*.nc4')))
-#     logging.basicConfig(filename=log_file, filemode='w', level=logging.INFO)
-#     try:
-#         for file in files_to_convert:
-#             resample_and_clip(file, save_dir, 10, 'TwoHalf_Clipped', True)
-#     except Exception as e:
-#         logging.info('\n\n\n')
-#         logging.info(f'FAILED at {datetime.datetime.utcnow()}')
-#         logging.info(e)
+if __name__ == '__main__':
+    """
+    Expects 2 arguments
+    1- the relative path to the directory of data to be converted
+    2- the relative path to the directory to save converted data to
+    2- the relative path to the log file
+
+    Recommended usage:
+        python resample_gldas.py original-data/ half-degree-data/ log.log &
+    """
+    home_path = os.path.dirname(__file__)
+    read_path = sys.argv[1]
+    save_dir = sys.argv[2]
+    log_file = sys.argv[3]
+    files_to_convert = sorted(glob.glob(os.path.join(read_path, '*.nc4')))
+    logging.basicConfig(filename=log_file, filemode='w', level=logging.INFO)
+    try:
+        for file in files_to_convert:
+            resample_and_clip(file, save_dir, 6, 'TwoHalf_Clipped', True)
+    except Exception as e:
+        logging.info('\n\n\n')
+        logging.info(f'FAILED at {datetime.datetime.utcnow()}')
+        logging.info(e)
