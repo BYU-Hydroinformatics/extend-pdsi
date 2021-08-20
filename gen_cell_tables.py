@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import random
+import glob
 
 import dateutil.relativedelta
 import netCDF4 as nc
@@ -10,16 +11,23 @@ import pandas as pd
 import rch
 
 
-def gen_pdsi_grid_table(pdsi_nc: str, res_json: str, save_path: str) -> None:
-    a = nc.Dataset(pdsi_nc)
-    mask = gen_array_mask(a['sc_PDSI_pm'][:])
-    a.close()
-
+def gen_lookup_table(path: str, dataset: str, res_json: str, save_path: str) -> None:
     with open(res_json) as f:
         table = pd.DataFrame(json.loads(f.read()))
 
+    table = table[table['prod'] == dataset]
+    if dataset == 'pdsi':
+        var = 'sc_PDSI_pm'
+    else:
+        var = 'Tair_f_inst'
+        table = table[table['res'] == 0.25]
+
+    a = nc.Dataset(path)
+    mask = gen_array_mask(a[var][:])
+    a.close()
+
     # select the PDSI values
-    prod, res, x0, y0, x_shp, y_shp = table[table['prod'] == 'pdsi'].values[0]
+    prod, res, x0, y0, x_shp, y_shp = table.values[0]
     x_idxs, y_idxs, x_vals, y_vals, c_nums = gen_reference_arrays(x_shp, y_shp, x0, y0, res)
 
     pd.DataFrame({
@@ -160,7 +168,7 @@ def gen_time_series_table(file_path: str, table_path: str, var_table: str, datas
     data = {}
     origin = datetime.date(year=1948, month=1, day=1)
     if 'gldas' in dataset:
-        variable = os.path.basename(file_path).replace('.nc', '').split('_')[-1]
+        variable = os.path.basename(file_path).replace('.nc', '').replace('GLDAS_TwoHalfClip_TimeSeries_', '')
         with open(var_table) as f:
             gldas_var_lookup = json.loads(f.read())
         var_code = gldas_var_lookup[variable]
@@ -185,7 +193,7 @@ def gen_time_series_table(file_path: str, table_path: str, var_table: str, datas
     a.index.name = 'datetime'
     # delete the empty columns
     a.to_csv(f'timeseries_tables_csv/{var_code}_cell_timeseries.csv')
-    a.to_pickle(f'timeseries_tables_pickle/{var_code}_cell_timeseries.pickle')
+    a.to_pickle(f'timeseries_tables_pickle_new/{var_code}_cell_timeseries.pickle')
     return
 
 
@@ -218,14 +226,33 @@ def gen_array_mask(a: np.array) -> np.array:
     return mask
 
 
-gen_pdsi_grid_table(
-    '/Users/rchales/data/spatialdata/pdsisc.monthly.maps.1850-2018.fawc-1.r2.5x2.5.ipe-2.nc',
-    'lookup_tables/dataset_resolution_map.json',
-    'lookup_tables/cell_table_pdsi.csv'
-)
-gen_gldas_grid_tables(
-    'lookup_tables/cell_table_pdsi.csv',
-    'lookup_tables/dataset_resolution_map.json'
-)
-gen_gldas_random_tables('lookup_tables/cell_table_pdsi.csv', 15)
-gen_time_series_table()
+# for file in glob.glob('/Users/rchales/data/spatialdata/GLDAS_TwoHalfClip/GLDAS_TwoHalfClip*'):
+#     print(file)
+#     gen_time_series_table(file, 'lookup_tables/cell_table_gldas_2.5.csv', 'lookup_tables/variables_lookup.json', 'gldas')
+
+gen_time_series_table('/Users/rchales/data/spatialdata/pdsisc.monthly.maps.1850-2018.fawc-1.r2.5x2.5.ipe-2.nc',
+                      'lookup_tables/cell_table_pdsi.csv',
+                      'lookup_tables/variables_lookup.json',
+                      'pdsi')
+
+
+# gen_lookup_table(
+#     '/Users/rchales/data/spatialdata/pdsisc.monthly.maps.1850-2018.fawc-1.r2.5x2.5.ipe-2.nc',
+#     'pdsi',
+#     'lookup_tables/dataset_resolution_map.json',
+#     'lookup_tables/cell_table_pdsi.csv'
+# )
+#
+# gen_lookup_table(
+#     '/Users/rchales/data/spatialdata/GLDAS_Original/GLDAS_NOAH025_M.A194801.020.nc4',
+#     'gldas',
+#     'lookup_tables/dataset_resolution_map.json',
+#     'lookup_tables/cell_table_gldas_0.25.csv'
+# )
+
+# gen_gldas_grid_tables(
+#     'lookup_tables/cell_table_pdsi.csv',
+#     'lookup_tables/dataset_resolution_map.json'
+# )
+# gen_gldas_random_tables('lookup_tables/cell_table_pdsi.csv', 15)
+# gen_time_series_table()
