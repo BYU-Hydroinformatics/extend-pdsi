@@ -5,18 +5,15 @@ import numpy as np
 
 def gen_error_map(error_table: str, cell_table: str, res: str, model: str):
     err = pd.read_pickle(error_table)
-    err.index = err.index.str.replace('v00_c', '').astype(int)
+    err.index = err.index.str.replace('c', '').astype(int)
     ltab = pd.read_csv(cell_table, index_col=0)
-    ltab.index = ltab.c_num
-    del ltab['c_num']
     assign_table = err.join(ltab)
 
-    if res == '250':
-        x_origin = -178.75
-        y_origin = -58.75
-        x_size = 144
-        y_size = 55
-        resolution = 2.5
+    x_origin = -178.75
+    y_origin = -58.75
+    x_size = 144
+    y_size = 55
+    resolution = 2.5
 
     map = nc.Dataset(f'error_maps_{res}_gldas_{model}.nc', 'w')
     # create dimensions
@@ -50,5 +47,8 @@ def gen_error_map(error_table: str, cell_table: str, res: str, model: str):
     return
 
 
-gen_error_map('error_250_reg.pickle', 'lookup_tables/cell_assign_gldas_250_clipped.csv', '250', 'reg')
-gen_error_map('error_250_unreg.pickle', 'lookup_tables/cell_assign_gldas_250_clipped.csv', '250', 'ureg')
+# gen_error_map('error_250_reg.pickle', 'lookup_tables/cell_assign_gldas_250_clipped.csv', '250', 'reg')
+# gen_error_map('error_250_unreg.pickle', 'lookup_tables/cell_assign_gldas_250_clipped.csv', '250', 'ureg')
+gen_error_map('/Users/rchales/Downloads/PDSI_Error 7_16/regularized_error.pickle', '/Users/rchales/code/extend-pdsi/lookup_tables/cell_table_gldas_2.5.csv', '250', 'reg')
+
+# pd.read_pickle('/Users/rchales/Downloads/PDSI_Error 7_16/regularized_error.pickle').to_csv('regerror.csv')
