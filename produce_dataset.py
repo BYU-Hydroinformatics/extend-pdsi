@@ -9,10 +9,11 @@ def produce_netcdf(save_dir: str,
                    cell_table: str,
                    error_table: str,
                    stats_table: str,
+                   pdsi_org_table: str,
                    pdsi_ext_table: str,
                    pdsi_mod_table: str,
                    pdsi_new_table: str, ):
-    new_nc = nc.Dataset(os.path.join(save_dir, 'pdsi_extended2.nc4'), 'w', format="NETCDF4")
+    new_nc = nc.Dataset(os.path.join(save_dir, 'pdsi_extended.nc4'), 'w', format="NETCDF4")
 
     cell_df = pd.read_csv(cell_table, index_col=0)
 
@@ -22,6 +23,9 @@ def produce_netcdf(save_dir: str,
 
     stats_df = pd.read_csv(stats_table, index_col=0)
     cell_df = stats_df.join(cell_df)
+
+    pdsi_org_df = pd.read_pickle(pdsi_org_table)
+    pdsi_org_df.columns = [str(i).replace('v00_', '') for i in pdsi_org_df.columns]
 
     pdsi_ext_df = pd.read_pickle(pdsi_ext_table)
     new_values = np.where(pdsi_ext_df.values > 10, 10, pdsi_ext_df.values)
@@ -37,6 +41,7 @@ def produce_netcdf(save_dir: str,
     x_size = 144
     y_size = 55
     t_size_ext = pdsi_ext_df.index.shape[0]
+    t_size_org = pdsi_org_df.index.shape[0]
     t_size_mod = pdsi_mod_df.index.shape[0]
     t_size_new = pdsi_new_df.index.shape[0]
     resolution = 2.5
@@ -52,6 +57,7 @@ def produce_netcdf(save_dir: str,
     lon = new_nc.createVariable('lon', 'f4', 'lon', zlib=True, shuffle=True)
 
     new_nc.createVariable("pdsi_extended", 'f4', ('time', 'lat', 'lon'), zlib=True, shuffle=True, fill_value=np.nan)
+    new_nc.createVariable("pdsi_filled", 'f4', ('time', 'lat', 'lon'), zlib=True, shuffle=True, fill_value=np.nan)
     new_nc.createVariable("pdsi_modeled", 'f4', ('time', 'lat', 'lon'), zlib=True, shuffle=True, fill_value=np.nan)
     new_nc.createVariable("pdsi_new", 'f4', ('time', 'lat', 'lon'), zlib=True, shuffle=True, fill_value=np.nan)
     new_nc.createVariable("pdsi_avg", 'f4', ('lat', 'lon'), zlib=True, shuffle=True, fill_value=np.nan)
@@ -60,11 +66,12 @@ def produce_netcdf(save_dir: str,
     new_nc.createVariable('mse', 'f4', ('lat', 'lon'), zlib=True, shuffle=True, fill_value=np.nan)
     new_nc.createVariable('rmse', 'f4', ('lat', 'lon'), zlib=True, shuffle=True, fill_value=np.nan)
 
-    new_nc['pdsi_extended'].setncattr('long_name', "PDSI + New Extension (1948-2020)")
+    new_nc['pdsi_extended'].setncattr('long_name', "PDSI (Original) + New Extension (1948-2020)")
+    new_nc['pdsi_filled'].setncattr('long_name', "PDSI (Filled Gaps) + New Extension (1948-2020)")
     new_nc['pdsi_modeled'].setncattr('long_name', "PDSI Modeled by Regression (1958-2020)")
     new_nc['pdsi_new'].setncattr('long_name', "PDSI New Extension (2019-2020)")
-    new_nc['pdsi_avg'].setncattr('long_name', "PDSI Average (1948-2018)")
-    new_nc['pdsi_std'].setncattr('long_name', "PDSI Standard Deviation (1948-2018)")
+    new_nc['pdsi_avg'].setncattr('long_name', "PDSI Average of 1948-2018")
+    new_nc['pdsi_std'].setncattr('long_name', "PDSI Standard Deviation of 1948-2018")
     new_nc['me'].setncattr('long_name', "Mean Error")
     new_nc['mse'].setncattr('long_name', "Mean Square Error")
     new_nc['rmse'].setncattr('long_name', "Root Mean Square Error")
@@ -99,6 +106,7 @@ def produce_netcdf(save_dir: str,
 
     # write the pdsi variables
     pdsi_ext_array = np.array([np.nan] * t_size_ext * y_size * x_size).reshape((t_size_ext, y_size, x_size))
+    pdsi_org_array = np.array([np.nan] * t_size_org * y_size * x_size).reshape((t_size_org, y_size, x_size))
     pdsi_mod_array = np.array([np.nan] * t_size_mod * y_size * x_size).reshape((t_size_mod, y_size, x_size))
     pdsi_new_array = np.array([np.nan] * t_size_new * y_size * x_size).reshape((t_size_new, y_size, x_size))
     pdsi_avg_array = np.array([np.nan] * y_size * x_size).reshape((y_size, x_size))
@@ -107,6 +115,7 @@ def produce_netcdf(save_dir: str,
         try:
             row = cell_df.loc[[int(cell.replace('c', ''))]]
             pdsi_ext_array[:, row.y_idx, row.x_idx] = pdsi_ext_df[cell].values.reshape(t_size_ext, 1)
+            pdsi_org_array[:, row.y_idx, row.x_idx] = pdsi_org_df[cell].values.reshape(t_size_org, 1)
             pdsi_mod_array[:, row.y_idx, row.x_idx] = pdsi_mod_df[cell].values.reshape(t_size_mod, 1)
             pdsi_new_array[:, row.y_idx, row.x_idx] = pdsi_new_df[cell].values.reshape(t_size_new, 1)
             pdsi_avg_array[row.y_idx, row.x_idx] = row.pdsi_avg
@@ -115,9 +124,11 @@ def produce_netcdf(save_dir: str,
             print(cell)
 
     pdsi_mod_array = np.pad(pdsi_mod_array, ((t_size_ext - t_size_mod, 0), (0, 0), (0, 0)), constant_values=np.nan)
+    pdsi_fil_array = np.concatenate((pdsi_org_array, pdsi_new_array))
     pdsi_new_array = np.pad(pdsi_new_array, ((t_size_ext - t_size_new, 0), (0, 0), (0, 0)), constant_values=np.nan)
 
     new_nc['pdsi_extended'][:] = pdsi_ext_array
+    new_nc['pdsi_filled'][:] = pdsi_fil_array
     new_nc['pdsi_modeled'][:] = pdsi_mod_array
     new_nc['pdsi_new'][:] = pdsi_new_array
     new_nc['pdsi_avg'][:] = pdsi_avg_array
@@ -132,8 +143,9 @@ save_dir = '/Users/rchales/data/pdsi_data/PDSI_results_8_24/results'
 cell_table = '/Users/rchales/code/extend-pdsi/lookup_tables/cell_table_pdsi.csv'
 error_table = '/Users/rchales/data/pdsi_data/PDSI_results_8_24/Model_Error.pickle'
 stats_table = '/Users/rchales/data/pdsi_data/PDSI_results_8_24/pdsi_stats.csv'
+pdsi_org_table = '/Users/rchales/code/extend-pdsi/timeseries_tables_pickle_new/v00_cell_timeseries.pickle'
 pdsi_ext_table = '/Users/rchales/data/pdsi_data/PDSI_results_8_24/PDSI_Extended1948_2021.pickle'
 pdsi_mod_table = '/Users/rchales/data/pdsi_data/PDSI_results_8_24/PDSI_Predictions1958_2021.pickle'
 pdsi_new_table = '/Users/rchales/data/pdsi_data/PDSI_results_8_24/PDSI_Predictions2019_2021.pickle'
 
-produce_netcdf(save_dir, cell_table, error_table, stats_table, pdsi_ext_table, pdsi_mod_table, pdsi_new_table)
+produce_netcdf(save_dir, cell_table, error_table, stats_table, pdsi_org_table, pdsi_ext_table, pdsi_mod_table, pdsi_new_table)
